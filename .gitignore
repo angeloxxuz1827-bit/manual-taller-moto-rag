@@ -1,0 +1,26 @@
+# Entorno virtual y secretos
+.venv/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+
+# Datos del proyecto (los PDFs no se versionan)
+/data/**/*.pdf
+
+# Artefactos del RAG
+.chroma/
+*.log
+
+# IDE / SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

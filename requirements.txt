@@ -1,0 +1,22 @@
+# Versiones fijadas tras instalación verificada en Python 3.14 (2026-10-22)
+
+# Core LangChain (API 1.x)
+langchain==1.4.7
+langchain-aws==1.9.0
+langchain-chroma==1.1.0
+
+# Vector store
+chromadb==1.5.9
+
+# AWS (S3 + Bedrock)
+boto3==1.43.117
+
+# Extracción de PDF (texto + tablas)
+pymupdf==2.0
+pdfplumber==0.11.10
+
+# Configuración
+python-dotenv==1.2.4
+
+# Tests
+pytest==9.1.1
