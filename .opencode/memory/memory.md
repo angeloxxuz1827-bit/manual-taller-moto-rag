@@ -27,13 +27,13 @@
 
 - **AWS**: cuenta `610433739351`, usuario IAM `vscode-dev`, región **`us-east-2`** (`sts get-caller-identity` OK).
 - **Bedrock en us-east-2**: disponibles `anthropic.claude-haiku-4-5-20251001-v1:0`, `anthropic.claude-sonnet-4-6`, `amazon.nova-*-v1:0`, `amazon.titan-embed-text-v2:0`.
-- **S3**: existen `bucket-test-entrevista` y `telegram-raw-messages-angel-...`; el bucket del proyecto **está por crear**.
+- **S3**: bucket del proyecto **`manual-taller-moto-rag-610433739351` creado (2026-10-22, us-east-2)**; además existen `bucket-test-entrevista` y `telegram-raw-messages-angel-...`.
 - **Python**: `.venv` con 3.14.6. Compatibilidad confirmada en PyPI: `langchain` 1.4.7, `langchain-openai` 1.7.2, `chromadb` 1.5.9 (wheels abi3), `pymupdf` 2.0, `pdfplumber` 0.11.10, `boto3` 1.43.
 - **Telegram**: token del bot en manos del usuario (no almacenar en memoria ni en el repo; irá a `.env`).
 
 ## Estado de fases
 
-Ver checklist completo en `docs/SPECS.md`. **F0 completada (2026-10-22)**: documentos, `git init -b main`, scaffolding, instalación editable y verificación (`import OK`, `1 passed`). F1–F8 pendientes; F9 (EC2) y F10 (Supabase) futuras.
+Ver checklist completo en `docs/SPECS.md`. **F0 y F1 completadas (2026-10-22)**: scaffolding con import y smoke test verificados; `StoragePort` local+S3 con round-trip (hash idéntico) en verde; bucket creado. F2–F8 pendientes; F9 (EC2) y F10 (Supabase) futuras.
 
 ## Aprendizajes
 
@@ -41,9 +41,10 @@ Ver checklist completo en `docs/SPECS.md`. **F0 completada (2026-10-22)**: docum
 - `chromadb` publica wheels `abi3` y `onnxruntime` 1.31 tiene wheel `cp314-win_amd64` → todo instala limpio en Python 3.14.
 - `list-foundation-models` de AWS CLI devuelve `modelSummaries` (no `foundationModelSummaries`).
 - Con layout `src/` hace falta **instalación editable** (`pip install -e .` vía `pyproject.toml`) o `pythonpath = ["src"]` en pytest; sin eso, `import manual_taller_rag` falla.
+- **Errores normalizados en el puerto**: `FileNotFoundError` tanto en local como en S3, para que la capa superior no dependa del proveedor. Ojo con `pytest.raises(match=...)`: evitar palabras con acento en el patrón si la consola no los maneja bien (falló con "raíz").
 
 ## Próxima acción
 
-1. **Primer commit de Fase 0** — pendiente de aprobación explícita del usuario.
-2. **Fase 1**: pedir aprobación, crear bucket `manual-taller-moto-rag-610433739351` y construir `StoragePort` (drivers `local` y `s3`).
-3. Dejar el PDF del manual en `data/manual/` (con él se decide D-01: chunk size/overlap).
+1. **Commit de la Fase 1** — pendiente de aprobación explícita.
+2. Pedir al usuario el **PDF del manual en `data/manual/`**: condiciona la Fase 2 (extractor) y la decisión D-01 (chunk size/overlap).
+3. **Fase 2**: `extractor.py` (texto vía PyMuPDF + tablas vía pdfplumber, con `page_number`).

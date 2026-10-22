@@ -22,7 +22,7 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 | Embeddings | **`amazon.titan-embed-text-v2:0`** | 1024 dims; cambiarlo ⇒ reindexar |
 | Vector store V1 | **ChromaDB local** (persistencia en disco) | |
 | Vector store V2 | **Supabase pgvector** | 🔮 Fase 10, fuera de la V1 |
-| Storage | **S3 real (boto3) + driver local** | Bucket: `manual-taller-moto-rag-610433739351` ⬜ por crear |
+| Storage | **S3 real (boto3) + driver local** | Bucket `manual-taller-moto-rag-610433739351` ✅ creado 2026-10-22 |
 | Extracción PDF | **Texto + tablas** (pdfplumber + PyMuPDF) | Imágenes/diagramas fuera de alcance V1 |
 | Retrieval | **MMR** | `k`, `fetch_k`, `lambda_mult` configurables |
 | Citas | **Sí: página/capítulo** | Requiere metadata en chunks |
@@ -90,12 +90,14 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 - ✅ Estructura `src/manual_taller_rag/` (8 paquetes con `__init__.py`), `scripts/`, `tests/` (+ smoke test), `data/manual/`
 - ✅ **Criterio de aceptación verificado**: instalación limpia en Python 3.14 · `import manual_taller_rag` → `OK 0.1.0` · `pytest` → `1 passed`
 
-### Fase 1 — Storage (local + S3)
+### Fase 1 — Storage (local + S3) ✅ (completada 2026-10-22)
 
-- ⬜ Puerto `StoragePort` (`put`, `get`, `exists`, `list`) + `local.py` + `s3.py`
-- ⬜ **Crear bucket `manual-taller-moto-rag-610433739351`** (requiere aprobación explícita)
-- ⬜ Subida del PDF a S3 y descarga con verificación de hash
-- **Criterio**: round-trip local→S3→descarga con hash idéntico; driver local supera los mismos tests.
+- ✅ Puerto `StoragePort` (`put_file`, `get_file`, `exists`, `list`, `delete`) + adaptadores `local.py` y `s3.py`; errores **normalizados** (`FileNotFoundError` en ambos) y rechazo de path traversal en local
+- ✅ `config.py`: `Settings` (dataclass con todos los valores de `.env.example`) + fábrica `get_storage()` según `STORAGE_DRIVER`; paths relativos resueltos contra la raíz del proyecto
+- ✅ **Bucket `manual-taller-moto-rag-610433739351` creado** en `us-east-2` (ARN `arn:aws:s3:::manual-taller-moto-rag-610433739351`)
+- ✅ **Criterio de aceptación verificado**: mismo round-trip (subida → descarga con **hash idéntico** → borrado idempotente) para local y S3 real → `5 passed, 1 skipped` (suite local) + `1 passed` (S3)
+- ⬜ Pendiente: subir el **PDF real** cuando esté en `data/manual/` (la subida completa vive en `scripts/ingest.py`, Fase 4)
+- Nota: `test_s3_round_trip` toca la nube sólo con `RUN_S3_TESTS=1` (fuera de la suite por defecto)
 
 ### Fase 2 — Extracción del PDF
 

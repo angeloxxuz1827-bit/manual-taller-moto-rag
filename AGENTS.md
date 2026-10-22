@@ -103,6 +103,6 @@ Procedimiento estándar:
 
 ## Estado actual
 
-**Fase 0 completada (2026-10-22)**: documentos de contexto, `git init -b main`, scaffolding
-(`requirements.txt` fijado, `pyproject.toml` con instalación editable, `.env.example`, README,
-estructura `src/`) y verificación de import + smoke test. **Siguiente: Fase 1 (storage local + S3).**
+**Fases 0–1 completadas (2026-10-22)**: contexto, scaffolding e import verificados; `StoragePort`
+con drivers **local** y **S3**, `config.py`, bucket `manual-taller-moto-rag-610433739351` creado
+y tests de round-trip en verde (local + S3 real). **Siguiente: Fase 2 (extracción del PDF).**
