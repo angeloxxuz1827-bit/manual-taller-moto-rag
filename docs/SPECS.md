@@ -112,12 +112,18 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 - 📊 **Métrica de extracción completa (real)**: 1654 bloques (623 texto + **1031 tablas**), 623/626 páginas con contenido (3 vacías), 0 PUA restantes, **369 s (≈6,2 min)** → vigilar la calidad de las tablas en F5 (D-05)
 - Nota D-08: motor **pdfplumber** (ver §3); PyMuPDF se mantiene para tests/diagnóstico
 
-### Fase 3 — Chunking
+### Fase 3 — Chunking ✅ (completada 2026-10-22)
 
-- ⬜ `chunker.py` con LangChain splitter: `CHUNK_SIZE`/`CHUNK_OVERLAP` por config
-- ⬜ Metadata (`page`, `section`, `source`) + **IDs estables** (hash)
-- ⬜ Ajuste de parámetros tras revisar el PDF real (ver §3)
-- **Criterio**: metadata presente en el 100% de los chunks; sin pérdida de texto.
+- ✅ `chunker.py`: `chunk_blocks()` → `Document` de LangChain con `RecursiveCharacterTextSplitter` (separadores para español: `["\n\n", "\n", ". ", " ", ""]`), tamaño/solape por config (1200/150) con validación (`overlap < size`)
+- ✅ **Tablas atómicas** (D-01): nunca se parten, para conservar la legibilidad de las especificaciones
+- ✅ Metadata por chunk: `page`, `source`, `kind`, `chunk_index` (+ `section` si existe) — **nunca `None`** (Chroma rechaza valores nulos)
+- ✅ **IDs estables**: `sha256(fuente|página|tipo|índice|contenido)[:32]` → re-ingerir con la misma configuración devuelve los mismos IDs (RNF-03); misma página + mismo contenido = mismo ID (deseado: re-ingesta sin duplicados)
+- ✅ Nueva dependencia fijada: `langchain-text-splitters==1.1.3`
+- ✅ **Criterio verificado**: metadata en el 100% de los chunks (unitarios + p.130 real con `RUN_PDF_TESTS=1`) y sin pérdida (todo chunk es subcadena de su bloque). Suite: `22 passed, 1 skipped`
+- 📊 **Stats completas (626 páginas, D-01 con datos)**: 2017 chunks (986 texto + 1031 tablas) desde 1654 bloques; texto mediana 910 chars (máx 1200; 95 chunks al tope); tablas mediana 75 chars (muchos fragmentos pequeños → vigilar calidad en F5/D-05) y máx 10.832 chars ≈ 2.700 tokens (dentro del límite 8192 de Titan v2); 73 tablas >1200 atómicas por diseño; **297 s** de extracción+chunking
+- ✅ IDs sin colisiones: el hash incluye el **ordinal del bloque** en su grupo (página, tipo) → dos bloques hermanos idénticos ya no chocan (regresión cubierta por test; Chroma exigiría unicidad)
+- ✅ `scripts/preview_chunks.py`: explorar chunks a demanda (`--paginas 116,130` | `1-5` | `todas`, `--n`, `--ancho`) usando el config de `.env`
+- ✅ **D-01 cerrado**: 1200/150 validados con estas stats (mediana 910 < 1200; sin pérdidas); reabrir solo si F5 muestra problemas de calidad
 
 ### Fase 4 — Embeddings + vector store
 
@@ -167,7 +173,7 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 
 | # | Decisión | Estado | Nota |
 |---|---|---|---|
-| D-01 | `CHUNK_SIZE` / `CHUNK_OVERLAP` definitivos | ⬜ | Propuesto 1200/150; ajustar observando el PDF real |
+| D-01 | `CHUNK_SIZE` / `CHUNK_OVERLAP` definitivos | ✅ | **1200/150** validados con stats del PDF real (mediana 910 chars, 9,6% de chunks al tope, sin pérdidas); reabrir solo si F5 muestra problemas |
 | D-02 | N de turnos de memoria | ⬜ | Propuesto 6 |
 | D-03 | Umbral de similitud para responder "no lo sé" | ⬜ | Definir tras métricas de F5 |
 | D-04 | Formato de tabla dentro de los chunks | ✅ | **Markdown** (`_tabla_a_markdown`: escape de `|`, filas rellenadas) |

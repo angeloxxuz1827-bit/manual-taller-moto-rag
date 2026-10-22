@@ -33,7 +33,7 @@
 
 ## Estado de fases
 
-Ver checklist completo en `docs/SPECS.md`. **F0, F1 y F2 completadas (2026-10-22)**: scaffolding; storage local+S3 con bucket; extractor en pdfplumber (texto + tablas Markdown + normalización Symbol) con el criterio de torque verificado contra el PDF real (`GSX_GIXXER250.pdf`, 626 pág). F3–F8 pendientes; F9 (EC2) y F10 (Supabase) futuras.
+Ver checklist completo en `docs/SPECS.md`. **F0–F3 completadas (2026-10-22)**: scaffolding; storage local+S3 con bucket; extractor pdfplumber (1654 bloques, 623/626 páginas, ≈6 min); chunker con tablas atómicas, metadata 100% e IDs estables (2017 chunks: 986 texto + 1031 tablas; D-01 cerrado con 1200/150). Suite: `23 passed, 1 skipped`. F4–F8 pendientes; F9 (EC2) y F10 (Supabase) futuras.
 
 ## Aprendizajes
 
@@ -45,9 +45,10 @@ Ver checklist completo en `docs/SPECS.md`. **F0, F1 y F2 completadas (2026-10-22
 - **PyMuPDF 2.0 `find_tables` cuesta 5–8 s/página** (modelo de layout `pymupdf-layout`, sin caché): inviable en 626 páginas. **pdfplumber**: 0,05–0,2 s/página y detectó tablas en **402/626** páginas → extractor reescrito en pdfplumber (D-08).
 - **Caracteres PUA de la fuente Symbol**: el manual usa U+F0D7 (`N·m`, 191 usos) y U+F046 (`→ (Página …)`, 1837 usos). Al teclearlos literalmente es inevitable confundirlos (se escribió U+F057 por U+F0D7 **dos veces**, invisible en el fuente) → **siempre `chr(0x…)` o escapes**, y verificar con `print([hex(k) for k in MAPA])`.
 - La consola de Windows (cp1252) **no puede imprimir `→`** y lanza `UnicodeEncodeError` → usar `PYTHONIOENCODING=utf-8` en pytest/scripts.
+- **Chroma exige IDs únicos**: bloques hermanos idénticos (fragmentos de tabla repetidos en una página) generaban hashes colisionados → el ID lleva el **ordinal del bloque** dentro de su grupo (página, tipo); determinista aunque se procese un subconjunto de páginas. Siempre test de regresión para esto.
 
 ## Próxima acción
 
-1. **Commit de la Fase 2** — pendiente de aprobación explícita (métrica ya en SPECS: 1654 bloques, 623/626 pág, ≈6,2 min).
-2. **Fase 3**: chunking con metadata (`page`, `source`) + IDs estables; decidir D-01 (chunk size/overlap) con el PDF real.
-3. Vigilar en F5 la calidad de las **1031 tablas** detectadas (puede haber fragmentos de baja calidad; contrastar con el set de evals).
+1. **Commit de la Fase 3** — aprobado por el usuario (stats de D-01 y fix de IDs incluidos).
+2. **Fase 4**: embeddings Bedrock (Titan v2, 1024d) + `vectorstore/chroma.py` + `scripts/ingest.py` idempotente — **pendiente de aprobación** (el usuario pidió solo commit de F3 por ahora; implica llamadas reales a Bedrock).
+3. Vigilar en F5 la calidad de las **1031 tablas** (mediana 75 chars: muchos fragmentos pequeños) con el set de evals.

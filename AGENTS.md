@@ -103,7 +103,7 @@ Procedimiento estándar:
 
 ## Estado actual
 
-**Fases 0–2 completadas (2026-10-22)**: contexto, scaffolding, `StoragePort` local+S3 con bucket,
-y **extractor** (pdfplumber: texto+tablas Markdown+normalización Symbol) con criterio de torque
-verificado contra el PDF real. Suite: `15 passed, 1 skipped` (+tests gated con flags).
-**Siguiente: Fase 3 (chunking con metadata).**
+**Fases 0–3 completadas (2026-10-22)**: contexto, scaffolding, `StoragePort` local+S3 con bucket,
+extractor pdfplumber (texto+tablas+normalización) y **chunker** (splitter español, tablas atómicas,
+metadata 100%, IDs hash estables) con criterios verificados contra el PDF real.
+Suite: `22 passed, 1 skipped`. **Siguiente: Fase 4 (embeddings Bedrock + Chroma + ingesta).**
