@@ -23,7 +23,7 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 | Vector store V1 | **ChromaDB local** (persistencia en disco) | |
 | Vector store V2 | **Supabase pgvector** | 🔮 Fase 10, fuera de la V1 |
 | Storage | **S3 real (boto3) + driver local** | Bucket `manual-taller-moto-rag-610433739351` ✅ creado 2026-10-22 |
-| Extracción PDF | **Texto + tablas** (pdfplumber + PyMuPDF) | Imágenes/diagramas fuera de alcance V1 |
+| Extracción PDF | **Texto + tablas con pdfplumber** (PyMuPDF solo en tests/diagnóstico) | D-08: `find_tables` de PyMuPDF descartado (5–8 s/pág). Imágenes/diagramas fuera de alcance V1 |
 | Retrieval | **MMR** | `k`, `fetch_k`, `lambda_mult` configurables |
 | Citas | **Sí: página/capítulo** | Requiere metadata en chunks |
 | Memoria | **Historial de N turnos/usuario** | N inicial = 6 (configurable) |
@@ -99,12 +99,18 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 - ⬜ Pendiente: subir el **PDF real** cuando esté en `data/manual/` (la subida completa vive en `scripts/ingest.py`, Fase 4)
 - Nota: `test_s3_round_trip` toca la nube sólo con `RUN_S3_TESTS=1` (fuera de la suite por defecto)
 
-### Fase 2 — Extracción del PDF
+### Fase 2 — Extracción del PDF ✅ (completada 2026-10-22)
 
-- ⬜ `extractor.py`: párrafos de texto + tablas detectadas, cada elemento con `page_number`
-- ⬜ Tablas a formato legible para el LLM (Markdown)
-- ⬜ Test con el PDF real (`data/manual/`)
-- **Criterio**: una tabla de torque real se extrae legible y con su página.
+- ✅ `extractor.py`: `ExtractedBlock` (`kind` text/table, `content`, `page_number`, `source`, `section` reservado) con bloques en orden de lectura por página
+- ✅ Texto de la página **sin** las celdas de sus tablas (filtro por centro de caracteres) → sin duplicados (verificado en p.191: 3277 → 1339 chars)
+- ✅ Tablas → **Markdown** (D-04): escape de `|`, filas con columnas rellenadas
+- ✅ Normalización de símbolos Symbol con `chr()`: `N·m` (U+F0D7) y referencia `→` (U+F046)
+- ✅ Parámetro `pages` (1-based) con validación de rango (`ValueError`)
+- ✅ **Criterio de aceptación verificado** con el PDF real (`RUN_PDF_TESTS=1`): **p.130** → `| Pieza a apretar | Par de apriete | N·m | kgf-m | lbf-ft |` con valor `5.5`; **p.116** → torque inline `6.7 N·m (0.68 kgf-m…)`; sin duplicación texto/tabla. Suite: `15 passed, 1 skipped`
+- ✅ Tests: 8 unitarios rápidos (PDF sintético hermético, sin dependencia del manual) + 2 gated con PDF real
+- ⬜ Alcance F4: la extracción completa de 626 páginas se ejecuta desde `scripts/ingest.py`
+- 📊 **Métrica de extracción completa (real)**: 1654 bloques (623 texto + **1031 tablas**), 623/626 páginas con contenido (3 vacías), 0 PUA restantes, **369 s (≈6,2 min)** → vigilar la calidad de las tablas en F5 (D-05)
+- Nota D-08: motor **pdfplumber** (ver §3); PyMuPDF se mantiene para tests/diagnóstico
 
 ### Fase 3 — Chunking
 
@@ -157,17 +163,18 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 
 ---
 
-## 3. Decisiones pendientes (abiertas)
+## 3. Decisiones técnicas (abiertas y resueltas)
 
 | # | Decisión | Estado | Nota |
 |---|---|---|---|
 | D-01 | `CHUNK_SIZE` / `CHUNK_OVERLAP` definitivos | ⬜ | Propuesto 1200/150; ajustar observando el PDF real |
 | D-02 | N de turnos de memoria | ⬜ | Propuesto 6 |
 | D-03 | Umbral de similitud para responder "no lo sé" | ⬜ | Definir tras métricas de F5 |
-| D-04 | Formato de tabla dentro de los chunks | ⬜ | Markdown propuesto |
+| D-04 | Formato de tabla dentro de los chunks | ✅ | **Markdown** (`_tabla_a_markdown`: escape de `|`, filas rellenadas) |
 | D-05 | Set de queries de evaluación y umbral | ⬜ | Se define en F5 con el PDF indexado |
 | D-06 | Cómo carga el usuario su librería de Telegram al proyecto | ⬜ | Condiciona el contrato de `telegram_adapter.py` (F7) |
 | D-07 | Estrategia de despliegue en EC2 (systemd vs compose) | 🔮 | Se decide en F9 |
+| D-08 | Motor de extracción: **pdfplumber único** (texto+tablas); PyMuPDF solo en tests/diagnóstico | ✅ | PyMuPDF `find_tables` (2.0) = 5–8 s/pág sin caché; pdfplumber ~0,1 s/pág y detecta tablas en 402/626 páginas |
 
 ---
 

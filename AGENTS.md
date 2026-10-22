@@ -62,7 +62,7 @@ python scripts/ingest.py --file data/manual/<manual>.pdf
 # Evaluación de retrieval — habilitado en Fase 5
 python scripts/evaluate.py
 
-# Tests
+# Tests (gated: RUN_PDF_TESTS=1 → tests contra el PDF real; RUN_S3_TESTS=1 → round-trip S3 real)
 python -m pytest
 
 # REPL local sin Telegram — habilitado en Fase 7
@@ -103,6 +103,7 @@ Procedimiento estándar:
 
 ## Estado actual
 
-**Fases 0–1 completadas (2026-10-22)**: contexto, scaffolding e import verificados; `StoragePort`
-con drivers **local** y **S3**, `config.py`, bucket `manual-taller-moto-rag-610433739351` creado
-y tests de round-trip en verde (local + S3 real). **Siguiente: Fase 2 (extracción del PDF).**
+**Fases 0–2 completadas (2026-10-22)**: contexto, scaffolding, `StoragePort` local+S3 con bucket,
+y **extractor** (pdfplumber: texto+tablas Markdown+normalización Symbol) con criterio de torque
+verificado contra el PDF real. Suite: `15 passed, 1 skipped` (+tests gated con flags).
+**Siguiente: Fase 3 (chunking con metadata).**

@@ -33,7 +33,7 @@
 
 ## Estado de fases
 
-Ver checklist completo en `docs/SPECS.md`. **F0 y F1 completadas (2026-10-22)**: scaffolding con import y smoke test verificados; `StoragePort` local+S3 con round-trip (hash idéntico) en verde; bucket creado. F2–F8 pendientes; F9 (EC2) y F10 (Supabase) futuras.
+Ver checklist completo en `docs/SPECS.md`. **F0, F1 y F2 completadas (2026-10-22)**: scaffolding; storage local+S3 con bucket; extractor en pdfplumber (texto + tablas Markdown + normalización Symbol) con el criterio de torque verificado contra el PDF real (`GSX_GIXXER250.pdf`, 626 pág). F3–F8 pendientes; F9 (EC2) y F10 (Supabase) futuras.
 
 ## Aprendizajes
 
@@ -42,9 +42,12 @@ Ver checklist completo en `docs/SPECS.md`. **F0 y F1 completadas (2026-10-22)**:
 - `list-foundation-models` de AWS CLI devuelve `modelSummaries` (no `foundationModelSummaries`).
 - Con layout `src/` hace falta **instalación editable** (`pip install -e .` vía `pyproject.toml`) o `pythonpath = ["src"]` en pytest; sin eso, `import manual_taller_rag` falla.
 - **Errores normalizados en el puerto**: `FileNotFoundError` tanto en local como en S3, para que la capa superior no dependa del proveedor. Ojo con `pytest.raises(match=...)`: evitar palabras con acento en el patrón si la consola no los maneja bien (falló con "raíz").
+- **PyMuPDF 2.0 `find_tables` cuesta 5–8 s/página** (modelo de layout `pymupdf-layout`, sin caché): inviable en 626 páginas. **pdfplumber**: 0,05–0,2 s/página y detectó tablas en **402/626** páginas → extractor reescrito en pdfplumber (D-08).
+- **Caracteres PUA de la fuente Symbol**: el manual usa U+F0D7 (`N·m`, 191 usos) y U+F046 (`→ (Página …)`, 1837 usos). Al teclearlos literalmente es inevitable confundirlos (se escribió U+F057 por U+F0D7 **dos veces**, invisible en el fuente) → **siempre `chr(0x…)` o escapes**, y verificar con `print([hex(k) for k in MAPA])`.
+- La consola de Windows (cp1252) **no puede imprimir `→`** y lanza `UnicodeEncodeError` → usar `PYTHONIOENCODING=utf-8` en pytest/scripts.
 
 ## Próxima acción
 
-1. **Commit de la Fase 1** — pendiente de aprobación explícita.
-2. Pedir al usuario el **PDF del manual en `data/manual/`**: condiciona la Fase 2 (extractor) y la decisión D-01 (chunk size/overlap).
-3. **Fase 2**: `extractor.py` (texto vía PyMuPDF + tablas vía pdfplumber, con `page_number`).
+1. **Commit de la Fase 2** — pendiente de aprobación explícita (métrica ya en SPECS: 1654 bloques, 623/626 pág, ≈6,2 min).
+2. **Fase 3**: chunking con metadata (`page`, `source`) + IDs estables; decidir D-01 (chunk size/overlap) con el PDF real.
+3. Vigilar en F5 la calidad de las **1031 tablas** detectadas (puede haber fragmentos de baja calidad; contrastar con el set de evals).
