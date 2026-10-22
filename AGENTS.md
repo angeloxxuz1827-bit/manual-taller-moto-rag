@@ -104,6 +104,7 @@ Procedimiento estándar:
 ## Estado actual
 
 **Fases 0–3 completadas (2026-10-22)**: contexto, scaffolding, `StoragePort` local+S3 con bucket,
-extractor pdfplumber (texto+tablas+normalización) y **chunker** (splitter español, tablas atómicas,
-metadata 100%, IDs hash estables) con criterios verificados contra el PDF real.
-Suite: `22 passed, 1 skipped`. **Siguiente: Fase 4 (embeddings Bedrock + Chroma + ingesta).**
+extractor **híbrido** (texto PyMuPDF + tablas pdfplumber, normalización; D-09) y **chunker**
+(splitter español, tablas atómicas, metadata 100%, IDs hash estables) con criterios verificados
+contra el PDF real. Suite: `25 passed, 1 skipped`.
+**Siguiente: Fase 4 (embeddings Bedrock + Chroma + ingesta).**

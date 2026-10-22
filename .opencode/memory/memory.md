@@ -12,7 +12,7 @@
 | Vector store V1 | ChromaDB local persistido en disco | Cero infraestructura para pruebas locales; integración directa con LangChain. |
 | Vector store V2 | Supabase pgvector (fase futura) | Mismo puerto `VectorStorePort`; la migración no toca el resto del pipeline. Decidido como **fase 2, fuera de la V1**. |
 | Storage | Driver local + driver S3 real (boto3); PDF de origen en `data/manual/` | Requisito: nube y local para pruebas. Bucket dedicado `manual-taller-moto-rag-610433739351` (**por crear**, requiere aprobación). |
-| Extracción PDF | Texto **y tablas** (pdfplumber + PyMuPDF), conservando nº de página | Los manuales de taller concentran datos críticos en tablas (torque, tolerancias, circuitos). Imágenes/diagramas: **fuera de alcance** en V1. |
+| Extracción PDF | **Híbrida** (D-09): texto con PyMuPDF + tablas con pdfplumber, conservando nº de página | pdfplumber entrelazaba las dos columnas del manual (D-08 sigue vigente para tablas: PyMuPDF detecta 0). Ambas librerías comparten sistema de coordenadas → bboxes de tabla sin conversión. |
 | Chunking | Con metadata de página/sección/fuente + IDs estables | Habilita citas en la respuesta e ingesta idempotente. Tamaño exacto: pendiente de ver el PDF real. |
 | Retrieval | **MMR** (parámetros `k`, `fetch_k`, `lambda_mult` por config) | Evita resultados duplicados/solapados (p. ej. procedimiento + su tabla de torque). |
 | Respuestas | En **español**, con **citas página/capítulo** | Confianza del usuario y facilidad de debugging. |
@@ -33,7 +33,7 @@
 
 ## Estado de fases
 
-Ver checklist completo en `docs/SPECS.md`. **F0–F3 completadas (2026-10-22)**: scaffolding; storage local+S3 con bucket; extractor pdfplumber (1654 bloques, 623/626 páginas, ≈6 min); chunker con tablas atómicas, metadata 100% e IDs estables (2017 chunks: 986 texto + 1031 tablas; D-01 cerrado con 1200/150). Suite: `23 passed, 1 skipped`. F4–F8 pendientes; F9 (EC2) y F10 (Supabase) futuras.
+Ver checklist completo en `docs/SPECS.md`. **F0–F3 completadas (2026-10-22)**: scaffolding; storage local+S3 con bucket; extractor **híbrido** D-09 (texto PyMuPDF + tablas pdfplumber, 1654 bloques, 623/626 páginas, **288 s**); chunker con tablas atómicas, metadata 100% e IDs estables (2021 chunks: 990 texto + 1031 tablas, 0 duplicados; D-01 cerrado con 1200/150). Suite: `25 passed, 1 skipped`. F4–F8 pendientes; F9 (EC2) y F10 (Supabase) futuras.
 
 ## Aprendizajes
 
@@ -46,9 +46,11 @@ Ver checklist completo en `docs/SPECS.md`. **F0–F3 completadas (2026-10-22)**:
 - **Caracteres PUA de la fuente Symbol**: el manual usa U+F0D7 (`N·m`, 191 usos) y U+F046 (`→ (Página …)`, 1837 usos). Al teclearlos literalmente es inevitable confundirlos (se escribió U+F057 por U+F0D7 **dos veces**, invisible en el fuente) → **siempre `chr(0x…)` o escapes**, y verificar con `print([hex(k) for k in MAPA])`.
 - La consola de Windows (cp1252) **no puede imprimir `→`** y lanza `UnicodeEncodeError` → usar `PYTHONIOENCODING=utf-8` en pytest/scripts.
 - **Chroma exige IDs únicos**: bloques hermanos idénticos (fragmentos de tabla repetidos en una página) generaban hashes colisionados → el ID lleva el **ordinal del bloque** dentro de su grupo (página, tipo); determinista aunque se procese un subconjunto de páginas. Siempre test de regresión para esto.
+- **pdfplumber entrelaza páginas a dos columnas**: `extract_text()` fusiona líneas base compartidas entre columnas izq/der y produce texto ilegible para RAG (p.116: «Válvula…Instalación» en la misma línea). **PyMuPDF agrupa por bloques y respeta el orden de lectura** (verificado en p.116/121/144/191) → extractor híbrido D-09 (texto PyMuPDF + tablas pdfplumber). Lección de proceso: los tests de F2 validaban *presencia* de contenido, no *orden de lectura* — añadir siempre un test de orden en PDFs multicolumna.
+- **PyMuPDF usa origen arriba-izquierda** (como pdfplumber, en puntos PDF), NO el origen abajo-izquierda del estándar PDF → los bboxes de pdfplumber se pueden usar **tal cual** para filtrar palabras de PyMuPDF. Se intentó un *y-flip* innecesario que movía los bboxes a la mitad inferior de la página y anulaba la exclusión (las celdas de tabla volcaban en el texto) — detectado por el test de no-duplicación de p.130 y corregido midiendo coordenadas reales de ambas librerías lado a lado.
 
 ## Próxima acción
 
-1. **Commit de la Fase 3** — aprobado por el usuario (stats de D-01 y fix de IDs incluidos).
-2. **Fase 4**: embeddings Bedrock (Titan v2, 1024d) + `vectorstore/chroma.py` + `scripts/ingest.py` idempotente — **pendiente de aprobación** (el usuario pidió solo commit de F3 por ahora; implica llamadas reales a Bedrock).
+1. **Fase 3 commiteada** (`715a01b`, 2026-10-22): fix de IDs verificado sobre el documento completo (2017 chunks, 0 duplicados) y `scripts/preview_chunks.py` disponible para explorar chunks.
+2. **Fase 4** ⬜ *pendiente de aprobación del usuario*: embeddings Bedrock (Titan v2, 1024d) + `vectorstore/chroma.py` + `scripts/ingest.py` idempotente — implica llamadas reales a Bedrock (coste pequeño, ~2000 embeddings).
 3. Vigilar en F5 la calidad de las **1031 tablas** (mediana 75 chars: muchos fragmentos pequeños) con el set de evals.

@@ -23,7 +23,7 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 | Vector store V1 | **ChromaDB local** (persistencia en disco) | |
 | Vector store V2 | **Supabase pgvector** | 🔮 Fase 10, fuera de la V1 |
 | Storage | **S3 real (boto3) + driver local** | Bucket `manual-taller-moto-rag-610433739351` ✅ creado 2026-10-22 |
-| Extracción PDF | **Texto + tablas con pdfplumber** (PyMuPDF solo en tests/diagnóstico) | D-08: `find_tables` de PyMuPDF descartado (5–8 s/pág). Imágenes/diagramas fuera de alcance V1 |
+| Extracción PDF | **Híbrida**: texto con PyMuPDF (orden de columnas) + tablas con pdfplumber | D-08: pdfplumber para tablas (PyMuPDF detecta 0). D-09: texto con PyMuPDF (pdfplumber entrelazaba columnas). Imágenes/diagramas fuera de alcance V1 |
 | Retrieval | **MMR** | `k`, `fetch_k`, `lambda_mult` configurables |
 | Citas | **Sí: página/capítulo** | Requiere metadata en chunks |
 | Memoria | **Historial de N turnos/usuario** | N inicial = 6 (configurable) |
@@ -102,15 +102,16 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 ### Fase 2 — Extracción del PDF ✅ (completada 2026-10-22)
 
 - ✅ `extractor.py`: `ExtractedBlock` (`kind` text/table, `content`, `page_number`, `source`, `section` reservado) con bloques en orden de lectura por página
-- ✅ Texto de la página **sin** las celdas de sus tablas (filtro por centro de caracteres) → sin duplicados (verificado en p.191: 3277 → 1339 chars)
+- ✅ Texto de la página **sin** las celdas de sus tablas (filtro por centro de palabras) → sin duplicados (verificado en p.191: 3277 → 1339 chars)
 - ✅ Tablas → **Markdown** (D-04): escape de `|`, filas con columnas rellenadas
 - ✅ Normalización de símbolos Symbol con `chr()`: `N·m` (U+F0D7) y referencia `→` (U+F046)
 - ✅ Parámetro `pages` (1-based) con validación de rango (`ValueError`)
-- ✅ **Criterio de aceptación verificado** con el PDF real (`RUN_PDF_TESTS=1`): **p.130** → `| Pieza a apretar | Par de apriete | N·m | kgf-m | lbf-ft |` con valor `5.5`; **p.116** → torque inline `6.7 N·m (0.68 kgf-m…)`; sin duplicación texto/tabla. Suite: `15 passed, 1 skipped`
-- ✅ Tests: 8 unitarios rápidos (PDF sintético hermético, sin dependencia del manual) + 2 gated con PDF real
+- ✅ **Criterio de aceptación verificado** con el PDF real (`RUN_PDF_TESTS=1`): **p.130** → `| Pieza a apretar | Par de apriete | N·m | kgf-m | lbf-ft |` con valor `5.5` y sin duplicación texto/tabla; **p.116** → torque inline `6.7 N·m (0.68 kgf-m…)` **y orden de lectura de columnas** (columna izquierda completa antes que la derecha; ver revisión D-09). Suite: `25 passed, 1 skipped`
+- ✅ Tests: 12 unitarios rápidos (PDF sintético hermético, sin dependencia del manual) + 3 gated con PDF real (torque, orden de columnas, tabla)
 - ⬜ Alcance F4: la extracción completa de 626 páginas se ejecuta desde `scripts/ingest.py`
-- 📊 **Métrica de extracción completa (real)**: 1654 bloques (623 texto + **1031 tablas**), 623/626 páginas con contenido (3 vacías), 0 PUA restantes, **369 s (≈6,2 min)** → vigilar la calidad de las tablas en F5 (D-05)
-- Nota D-08: motor **pdfplumber** (ver §3); PyMuPDF se mantiene para tests/diagnóstico
+- 📊 **Métrica de extracción completa (real)**: 1654 bloques (623 texto + **1031 tablas**; 390 páginas produjeron bloques de tabla), 623/626 páginas con contenido (3 vacías), 0 PUA restantes, **288 s (≈4,8 min)** tras D-09 (369 s con el extractor previo) → vigilar la calidad de las tablas en F5 (D-05)
+- 🔄 **Revisión D-09 (2026-10-22)**: extractor **híbrido** — texto con PyMuPDF + tablas con pdfplumber. Motivo: pdfplumber fusionaba líneas base de columna izquierda/ derecha en páginas a dos columnas y producía texto entrelazado (p.116: «Válvula…Instalación» en la misma línea); PyMuPDF agrupa por bloques y respeta el orden de lectura. Los bboxes de tabla se usan **sin conversión** (ambas librerías: origen arriba-izquierda, unidades en puntos PDF) para excluir celdas del texto
+- Nota D-08/D-09: pdfplumber sigue siendo el motor de **tablas**; PyMuPDF es el motor de **texto** (se verificó en p.116/121/144/191 y con tests gated)
 
 ### Fase 3 — Chunking ✅ (completada 2026-10-22)
 
@@ -120,7 +121,7 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 - ✅ **IDs estables**: `sha256(fuente|página|tipo|índice|contenido)[:32]` → re-ingerir con la misma configuración devuelve los mismos IDs (RNF-03); misma página + mismo contenido = mismo ID (deseado: re-ingesta sin duplicados)
 - ✅ Nueva dependencia fijada: `langchain-text-splitters==1.1.3`
 - ✅ **Criterio verificado**: metadata en el 100% de los chunks (unitarios + p.130 real con `RUN_PDF_TESTS=1`) y sin pérdida (todo chunk es subcadena de su bloque). Suite: `22 passed, 1 skipped`
-- 📊 **Stats completas (626 páginas, D-01 con datos)**: 2017 chunks (986 texto + 1031 tablas) desde 1654 bloques; texto mediana 910 chars (máx 1200; 95 chunks al tope); tablas mediana 75 chars (muchos fragmentos pequeños → vigilar calidad en F5/D-05) y máx 10.832 chars ≈ 2.700 tokens (dentro del límite 8192 de Titan v2); 73 tablas >1200 atómicas por diseño; **297 s** de extracción+chunking
+- 📊 **Stats completas (626 páginas, re-medidas con el extractor D-09)**: 2021 chunks (990 texto + 1031 tablas) desde 1654 bloques; texto mediana 908 chars (máx 1200); tablas mediana 75 chars (muchos fragmentos pequeños → vigilar calidad en F5/D-05) y máx 10.832 chars ≈ 2.700 tokens (dentro del límite 8192 de Titan v2); 73 tablas >1200 atómicas por diseño; **288 s** de extracción+chunking; IDs: 2021 únicos, **0 duplicados**
 - ✅ IDs sin colisiones: el hash incluye el **ordinal del bloque** en su grupo (página, tipo) → dos bloques hermanos idénticos ya no chocan (regresión cubierta por test; Chroma exigiría unicidad)
 - ✅ `scripts/preview_chunks.py`: explorar chunks a demanda (`--paginas 116,130` | `1-5` | `todas`, `--n`, `--ancho`) usando el config de `.env`
 - ✅ **D-01 cerrado**: 1200/150 validados con estas stats (mediana 910 < 1200; sin pérdidas); reabrir solo si F5 muestra problemas de calidad
@@ -173,14 +174,15 @@ RAG end-to-end sobre el manual de taller de una motocicleta en PDF, con etapas *
 
 | # | Decisión | Estado | Nota |
 |---|---|---|---|
-| D-01 | `CHUNK_SIZE` / `CHUNK_OVERLAP` definitivos | ✅ | **1200/150** validados con stats del PDF real (mediana 910 chars, 9,6% de chunks al tope, sin pérdidas); reabrir solo si F5 muestra problemas |
+| D-01 | `CHUNK_SIZE` / `CHUNK_OVERLAP` definitivos | ✅ | **1200/150** validados con stats del PDF real (mediana 908 chars, sin pérdidas); reabrir solo si F5 muestra problemas |
 | D-02 | N de turnos de memoria | ⬜ | Propuesto 6 |
 | D-03 | Umbral de similitud para responder "no lo sé" | ⬜ | Definir tras métricas de F5 |
 | D-04 | Formato de tabla dentro de los chunks | ✅ | **Markdown** (`_tabla_a_markdown`: escape de `|`, filas rellenadas) |
 | D-05 | Set de queries de evaluación y umbral | ⬜ | Se define en F5 con el PDF indexado |
 | D-06 | Cómo carga el usuario su librería de Telegram al proyecto | ⬜ | Condiciona el contrato de `telegram_adapter.py` (F7) |
 | D-07 | Estrategia de despliegue en EC2 (systemd vs compose) | 🔮 | Se decide en F9 |
-| D-08 | Motor de extracción: **pdfplumber único** (texto+tablas); PyMuPDF solo en tests/diagnóstico | ✅ | PyMuPDF `find_tables` (2.0) = 5–8 s/pág sin caché; pdfplumber ~0,1 s/pág y detecta tablas en 402/626 páginas |
+| D-08 | Motor de extracción: **pdfplumber único** (texto+tablas); PyMuPDF solo en tests/diagnóstico | ⚠️ | Parcialmente superada por D-09: pdfplumber sigue para **tablas** (PyMuPDF `find_tables` 2.0 = 5–8 s/pág sin caché, 0 detecciones; pdfplumber ~0,1 s/pág y detecta tablas en 402/626 páginas); el **texto** pasó a PyMuPDF |
+| D-09 | Extracción **híbrida**: texto con PyMuPDF + tablas con pdfplumber; bboxes de tabla sin conversión | ✅ | pdfplumber entrelazaba líneas base de columnas izq/der en páginas a dos columnas (p.116); PyMuPDF agrupa por bloques y respeta el orden de lectura (verificado en p.116/121/144/191). Ambas librerías usan origen arriba-izquierda en puntos PDF → mismo sistema de coordenadas, sin *y-flip* |
 
 ---
 

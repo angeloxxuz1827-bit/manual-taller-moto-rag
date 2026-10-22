@@ -14,9 +14,9 @@ import pymupdf
 import pytest
 
 from manual_taller_rag.ingestion.extractor import (
-    _fuera_de_tabla,
     _normalizar,
     _tabla_a_markdown,
+    _texto_sin_tablas,
     extract_blocks,
 )
 
@@ -91,16 +91,38 @@ def test_normalizar_simbolos_symbol() -> None:
     assert _normalizar("texto normal") == "texto normal"
 
 
-def test_fuera_de_tabla_filtra_chars_dentro_del_bbox() -> None:
-    bboxes = [(100.0, 200.0, 300.0, 400.0)]
-    dentro = {"object_type": "char", "x0": 150.0, "x1": 160.0, "top": 250.0, "bottom": 260.0}
-    fuera = {"object_type": "char", "x0": 10.0, "x1": 20.0, "top": 10.0, "bottom": 20.0}
-    linea = {"object_type": "line", "x0": 150.0, "x1": 160.0, "top": 250.0, "bottom": 250.0}
+class _PaginaFake:
+    """Página mínima PyMuPDF que sólo implementa ``get_text('words')``."""
 
-    assert _fuera_de_tabla(dentro, bboxes) is False
-    assert _fuera_de_tabla(fuera, bboxes) is True
-    assert _fuera_de_tabla(linea, bboxes) is True  # sólo se filtran chars
-    assert _fuera_de_tabla(dentro, []) is True  # sin tablas no se filtra nada
+    def __init__(self, palabras: list[tuple]) -> None:
+        self._palabras = palabras
+
+    def get_text(self, tipo: str) -> list[tuple]:
+        assert tipo == "words"
+        return self._palabras
+
+
+def test_texto_sin_tablas_excluye_palabras_de_tabla() -> None:
+    # words: (x0, y0, x1, y1, palabra, bloque, línea, nº palabra)
+    # Bbox en el mismo sistema que las words: origen arriba-izquierda (D-09)
+    palabras = [
+        (10.0, 10.0, 60.0, 20.0, "texto", 0, 0, 0),
+        (100.0, 10.0, 150.0, 20.0, "celda", 0, 0, 1),
+        (10.0, 40.0, 60.0, 50.0, "libre", 0, 1, 0),
+    ]
+    texto = _texto_sin_tablas(_PaginaFake(palabras), [(90.0, 0.0, 200.0, 25.0)])
+
+    assert "celda" not in texto  # dentro del bbox de tabla (ya invertido)
+    assert "texto" in texto and "libre" in texto
+
+
+def test_texto_sin_tablas_sin_bboxes_conserva_todo() -> None:
+    palabras = [
+        (10.0, 10.0, 60.0, 20.0, "hola", 0, 0, 0),
+        (70.0, 10.0, 120.0, 20.0, "mundo", 0, 0, 1),
+    ]
+    texto = _texto_sin_tablas(_PaginaFake(palabras), [])
+    assert texto == "hola mundo"
 
 
 @pytest.mark.skipif(
@@ -114,6 +136,31 @@ def test_pdf_real_extrae_torque_con_pagina() -> None:
     assert bloques, "la página 116 no devolvió bloques"
     assert all(b.page_number == 116 for b in bloques)
     assert any("N·m" in b.content for b in bloques)
+
+
+@pytest.mark.skipif(
+    os.getenv("RUN_PDF_TESTS") != "1",
+    reason="requiere RUN_PDF_TESTS=1 (PDF real de 626 páginas)",
+)
+def test_pdf_real_orden_de_columnas_pagina_116() -> None:
+    """Regresión D-09: la columna izquierda se lee entera antes que la derecha.
+
+    Con el extractor anterior (pdfplumber para texto) las columnas se
+    entrelazaban línea a línea en páginas a dos columnas como esta.
+    """
+    assert PDF_REAL.exists(), f"Falta el PDF real: {PDF_REAL}"
+    bloques = extract_blocks(PDF_REAL, pages=[116])
+    texto = "\n".join(b.content for b in bloques if b.kind == "text")
+
+    i_izq_1 = texto.find("1) Retire los siguientes componentes")
+    i_izq_2 = texto.find("2) Desconecte el acoplador")
+    i_izq_3 = texto.find("3) Retire la válvula del solenoide")
+    i_der_1 = texto.find("\nInstalación\n")  # cabecera de columna derecha, en su propia línea
+    i_der_2 = texto.find("Instale la válvula del solenoide")
+
+    assert -1 not in (i_izq_1, i_izq_2, i_izq_3, i_der_1, i_der_2), "faltan marcadores de columna"
+    # Columna izquierda completa (1)…2)…3)) ANTES de la columna derecha
+    assert i_izq_1 < i_izq_2 < i_izq_3 < i_der_1 < i_der_2
 
 
 @pytest.mark.skipif(
